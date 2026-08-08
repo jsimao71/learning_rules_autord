@@ -2,11 +2,21 @@
 
 ## Mission
 
-Discover compact, interpretable **local learning rules** that cause a fixed hierarchical neural network to recover the latent hierarchy of fixed synthetic generative worlds. The neural topology and benchmark are not targets for optimization. The learning rule is.
+Discover compact, interpretable **local learning rules** that cause a fixed hierarchical neural network to recover the hierarchy exposed by a fixed dataset provider. The selected provider, neural topology, training loop, and benchmark are not targets for optimization. The learning rule is.
 
 The scientific objective is to identify mechanisms that may later transfer to hierarchical representation and invariant learning in vision, language, temporal, and sensorimotor domains.
 
-Success on this benchmark demonstrates hierarchy recovery in nested Gaussian data, not general concept formation.
+Success on one provider demonstrates hierarchy recovery for that benchmark, not general concept formation or cross-dataset transfer.
+
+## Benchmark architecture
+
+The benchmark has three immutable layers during Auto-R&D:
+
+1. The selected dataset-provider notebook defines cases, seeds, features, hierarchy labels, and parent maps. The default is `nb/Dataset.ipynb`.
+2. `nb/Prepare.ipynb` validates provider output and defines topology, training, numerical guards, and metrics.
+3. `nb/Eval.ipynb` loads both layers, imports `nb/Rules.py`, tunes parameters, evaluates panels, and records results.
+
+An operator may select another provider before a benchmark run with `AUTORD_DATASET_NOTEBOOK`. A rule-search agent must not set, change, or condition behavior on that value.
 
 ## Non-negotiable file permissions
 
@@ -19,24 +29,31 @@ During Auto-R&D, you MAY:
 
 You MUST NOT edit:
 
+- the selected dataset-provider notebook, including `nb/Dataset.ipynb`
 - `nb/Prepare.ipynb`
 - `nb/Eval.ipynb`
 - `nb/Rules.ipynb`
 - `README.md`
+- `src/util/plot_util.py`
 - `docs/papers/learning_rules_autord.tex` or its PDF
-- metric code
-- dataset/generator code
-- topology code
-- seed selection
-- development/promotion world definitions
+- dataset cases, splits, seeds, labels, parent maps, or provider selection
+- metric, topology, training, or dataset-validation code
 - evaluation budgets
 - numerical guards or any future locality checks
 
-Do not modify notebooks to improve a score. Do not bypass imports, monkey-patch SciPy/NumPy, inspect latent labels from `nb/Rules.py`, read evaluator globals, read experiment answers from disk, or condition behavior on seed/world identity.
+Do not modify notebooks to improve a score. Do not bypass imports, monkey-patch SciPy/NumPy, inspect hierarchy labels from `nb/Rules.py`, read provider/evaluator globals, read experiment answers from disk, or condition behavior on provider, case, seed, split, or dataset identity.
+
+Provider cells tagged `skip-on-provider-import` are interactive documentation or visualization only. The evaluator must skip them, and their output must not enter fitness calculations or rule state.
+
+## Dataset-provider boundary
+
+The provider contract is documented in `nb/Dataset.ipynb` and `README.md`. Provider output is privileged evaluator input. It may include labels, parent maps, and metadata because fixed metrics need ground truth; none of those fields are available to `nb/Rules.py`.
+
+Treat each provider and its declared development/promotion panels as a separate benchmark. Never compare scores from different providers as though they came from the same fitness distribution. Claims of transfer require independently reported results across providers.
 
 ## Fundamental invariance
 
-Neuron numbering has no semantic meaning. Never optimize toward neuron `i` matching latent prototype `i` directly. Evaluation is permutation invariant.
+Neuron numbering has no semantic meaning. Never optimize toward neuron `i` matching hierarchy node `i` directly. Evaluation is permutation invariant.
 
 For correspondence matrix `C`, the evaluator solves an optimal assignment, rewards high assigned correspondence, and penalizes unmatched cross-talk. The same principle applies to topology comparisons after independently aligning neighboring layers.
 
@@ -50,7 +67,7 @@ Keep this `nb/Rules.py` API unchanged:
 - `update(x, y, w, state, cfg)`
 - `complexity_score()`
 
-The current runner does not provide a `LocalContext` object. In `activate` and `update`, a candidate may use only information passed through this API:
+The runner does not provide a `LocalContext` object. In `activate` and `update`, a candidate may use only information passed through this API:
 
 - `x`: presynaptic activities for the current layer
 - `y`: postsynaptic activities for the current layer, when passed to `update`
@@ -62,13 +79,13 @@ Layer-local traces, neuron statistics, competition state, and homeostatic variab
 
 A rule must not use:
 
-- ground-truth latent identities or labels
-- generator parent assignments
+- dataset hierarchy identities or labels
+- dataset parent assignments or provider metadata
 - global loss or backpropagated gradients
 - activities not passed through the public layer API
 - evaluation correspondence matrices or optimal assignments
-- evaluator globals
-- development or promotion world identity
+- provider, preparation, or evaluator globals
+- provider, case, split, seed, or dataset identity
 - experiment history or answers read from disk
 
 The locality contract is a protocol and code-review boundary; the current Python evaluator is not a security sandbox and does not automatically detect every violation.
@@ -79,16 +96,18 @@ Repeat the following cycle until the experiment budget is exhausted.
 
 ### 1. Inspect evidence
 
-Read the current champion rule and recent available experiment evidence. Identify a concrete failure mode, for example:
+Read the selected provider's documented characteristics, the current champion rule, and recent available experiment evidence. Identify a concrete failure mode, for example:
 
 - duplicate neurons or insufficient specialization
 - dead neurons
 - excessive weight growth
 - weak hierarchy specificity
 - correct clustering at one layer but poor higher-level abstraction
-- unstable performance across seeds or worlds
+- unstable performance across cases or seeds
 - excessive sensitivity to overlap or variance
 - poor topology consistency
+
+Do not inspect individual labels, parent maps, generated samples, or provider internals from `nb/Rules.py`.
 
 ### 2. State one hypothesis
 
@@ -116,11 +135,11 @@ The checked-in evaluator call uses the smoke-test budget `maxiter=2, popsize=3`;
 
 ### 6. Evaluate across the configured panel
 
-Use the evaluator exactly as provided. Development optimization currently uses two world specifications and three seeds. The promotion panel uses those specifications plus one additional specification across five seeds. The specifications are visible and therefore do not constitute a hidden test set.
+Use the evaluator and selected provider exactly as configured. The provider declares development and promotion cases and seeds. Record the provider name with every result. Visible promotion cases do not constitute a hidden test set.
 
 ### 7. Apply rejection criteria
 
-The evaluator automatically raises on non-finite weights and caps weight-row norms at `5.0`. Reject any candidate that fails those checks.
+Provider output is validated before training. The evaluator automatically raises on non-finite weights and caps weight-row norms at `5.0`. Reject any candidate that fails those checks.
 
 Also reject a candidate on protocol or review evidence that it:
 
@@ -142,12 +161,12 @@ Use the fixed composite score and examine:
 - assigned-versus-unmatched correspondence dominance
 - cross-level specificity
 - co-activity-derived parent-child/topology agreement
-- performance on the additional promotion world
+- performance on promotion-only cases, if the provider declares any
 - mean score across the configured panel
 - minimum panel score
 - across-panel variance
 
-Complexity is penalized. If scores are statistically indistinguishable, prefer the simpler rule. Do not promote on one lucky seed or world.
+Complexity is penalized. If scores are statistically indistinguishable, prefer the simpler rule. Do not promote on one lucky seed or case.
 
 ### 9. Keep or revert
 
@@ -155,10 +174,11 @@ If the promotion criteria are met, keep the new `nb/Rules.py` as champion. Other
 
 ### 10. Record scientific interpretation
 
-The current evaluator's compact CSV record contains the timestamp, fitness, mean/standard-deviation/minimum overall scores, mean hierarchy/specificity/topology scores, and optimized parameters.
+The evaluator's compact CSV record contains the dataset-provider name, timestamp, fitness, mean/standard-deviation/minimum overall scores, mean hierarchy/specificity/topology scores, and optimized parameters.
 
 In the trial report—and in a narrative notes file only when one has been explicitly designated—also record:
 
+- provider name
 - trial id and parent rule id
 - hypothesis
 - code or mechanism change
@@ -185,8 +205,8 @@ Do not assume these mechanisms are correct. Treat them as hypotheses.
 
 ## Scientific guardrails
 
-The first benchmark intentionally uses nested Gaussian worlds and gives each neural layer the corresponding latent level's cardinality. A rule that succeeds here has demonstrated hierarchical clustering or recovery under substantial structural prior knowledge, not general concept formation. Do not overclaim.
+The default provider intentionally uses nested Gaussian worlds and gives each neural layer the corresponding hierarchy level's cardinality. A rule that succeeds there has demonstrated hierarchical clustering or recovery under substantial structural prior knowledge, not general concept formation. Do not overclaim.
 
-After a robust rule emerges, future benchmark stages should increase difficulty with anisotropic covariance, unequal cluster priors, nonlinear manifolds, transformation-defined equivalence classes, temporal continuity, active sensorimotor perturbations, and over-provisioned neural layers.
+New providers should increase difficulty with anisotropic covariance, unequal priors, nonlinear manifolds, transformation-defined equivalence classes, temporal continuity, active sensorimotor perturbations, over-provisioned neural layers, or independently sourced datasets. Provider changes must be versioned and evaluated as new benchmarks rather than introduced during a rule search.
 
-The final target is a reusable learning principle, not benchmark-specific code.
+The final target is a reusable learning principle, not provider-specific code.
