@@ -1,0 +1,125 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref,microtype}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+\title{Auto-R\&D for Discovering Local Learning Rules that Build Hierarchical Representations}
+\author{Research Draft}
+\date{August 2026}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We propose a controlled methodology for discovering local neural plasticity rules that construct hierarchical representations without backpropagated global error. The method combines synthetic hierarchical generative worlds with exact latent ground truth, a fixed neural topology, strictly local learning-rule interfaces, permutation-invariant representation alignment, and an autonomous coding-agent search loop. The initial benchmark uses nested multidimensional Gaussian prototypes: coarse prototypes generate finer prototypes, which ultimately generate observations. A neural hierarchy with corresponding layer cardinalities is trained using candidate local rules. Because neuron identities are arbitrary, evaluation solves an assignment problem at each level and asks whether some permutation makes the neural--latent correspondence matrix close to identity. Additional metrics test whether each layer preferentially represents its intended latent scale and whether aligned parent--child relations reconstruct the true generative tree. Continuous rule parameters are optimized numerically, while a coding agent proposes changes to the rule's functional form. Multi-seed and multi-world evaluation, hard locality and stability constraints, complexity penalties, and persistent rule genealogy reduce benchmark gaming and selection of brittle rules. The long-term aim is to use automated experimentation to move beyond hand-designed Hebbian intuitions and discover compact local mechanisms that transfer to vision, language, temporal prediction, and active sensorimotor learning.
+\end{abstract}
+
+\section{Motivation}
+Local plasticity rules such as Hebbian learning, Oja normalization, BCM-like adaptation, spike-timing-dependent plasticity, lateral inhibition, and homeostatic regulation can discover statistical structure without propagating an explicit global gradient. The difficult problem is not whether a local rule can learn correlations, but whether repeated local adaptation can organize successive layers into a hierarchy of increasingly stable abstractions. In ordinary natural datasets, the target internal hierarchy is unknown, which makes the scientific question difficult to measure directly.
+
+We therefore propose treating local-rule design as an empirical search problem. The theory constrains what information is locally available and defines what counts as a good hierarchy; automated research explores the space of candidate plasticity mechanisms. This follows the broader ``auto-R\&D'' pattern of repeated code mutation and experimental selection, but applies it to the learning algorithm itself rather than primarily to architecture or training hyperparameters.
+
+\section{Hierarchical Generative Worlds}
+Let levels be indexed from fine to coarse by $\ell=0,\dots,M$. At the top level, $K_M$ prototype centers $\mu^{(M)}_j\in\mathbb{R}^d$ are sampled from a broad uniform distribution or placed on a grid. Each finer prototype chooses a parent at the next coarser level and is sampled according to
+\begin{equation}
+\mu^{(\ell)}_i \sim \mathcal{N}\!\left(\mu^{(\ell+1)}_{\pi_\ell(i)},\,\sigma_{\ell+1}^2 I\right),
+\end{equation}
+with $K_{\ell}>K_{\ell+1}$. Observations are generated around leaf prototypes,
+\begin{equation}
+x \sim \mathcal{N}\!\left(\mu^{(0)}_{z_0},\,\sigma_0^2 I\right).
+\end{equation}
+The generator records the exact path $z_0,z_1,\ldots,z_M$ for every sample. Thus the experiment possesses a known hierarchy of latent concepts at every abstraction level.
+
+The Gaussian benchmark is intentionally simple. Its purpose is to provide a microscope for studying hierarchical learning. A successful rule has demonstrated recovery of hierarchical statistical structure, not yet general concept formation. Later benchmark families should include anisotropic covariances, unequal priors, nonlinear manifolds, transformation-defined equivalence classes, temporal continuity, and active sensorimotor perturbations.
+
+\section{Fixed Neural Topology and Locality}
+The stage-one neural network contains one layer per generative level. Layer $\ell$ contains $K_\ell$ neurons, matching the number of latent nodes at that level. Matching capacity isolates the learning-rule question from architecture search. Later experiments can deliberately over-provision layers and ask whether local competition, pruning, or neurogenesis can infer effective cardinality.
+
+A candidate rule receives only a local context. Permitted variables may include presynaptic activity, postsynaptic activity, current synaptic weights, local traces, within-layer competitive state, and local homeostatic statistics. Forbidden variables include latent labels, parent assignments, global loss, gradients, optimal permutations, evaluation metrics, and hidden benchmark state. This distinction is fundamental: a local rule may participate in globally organized network dynamics, but its synaptic update may not consume privileged non-local information.
+
+\section{Permutation-Invariant Representation Recovery}
+Neuron identities are arbitrary. If neuron 7 learns latent prototype 2 and neuron 2 learns latent prototype 7, the representation can still be perfect. Therefore direct comparison of neuron index with latent index is invalid.
+
+For neural layer $\ell$ and generative level $j$, construct a correspondence matrix $C^{(\ell,j)}$. In the simplest implementation, each entry measures the normalized mean response of neural unit $a$ to samples belonging to latent node $b$,
+\begin{equation}
+C_{ab}^{(\ell,j)} = \mathrm{selectivity}\left(h^{(\ell)}_a,z_j=b\right).
+\end{equation}
+When cardinalities match, perfect recovery means not $C\approx I$ but
+\begin{equation}
+\exists P\in\mathcal{P}:\quad PC\approx I,
+\end{equation}
+where $P$ is a permutation matrix. We obtain the optimal assignment with the Hungarian algorithm rather than enumerating $K!$ permutations. Equivalently,
+\begin{equation}
+P^* = \arg\max_{P\in\mathcal{P}} \mathrm{tr}(PC).
+\end{equation}
+
+A useful score rewards matched diagonal strength and penalizes unmatched cross-talk. For the optimally assigned pairs $\mathcal{A}$,
+\begin{equation}
+Q_{\mathrm{match}} = \mathrm{coverage}\left(\frac{1}{|\mathcal{A}|}\sum_{(a,b)\in\mathcal{A}}C_{ab} - \mathrm{mean}_{(a,b)\notin\mathcal{A}}|C_{ab}|\right).
+\end{equation}
+The formulation naturally extends to rectangular matrices using partial assignment, which is useful when comparing a neural layer against generative levels with different cardinalities.
+
+\section{Level Specificity}
+Recovering useful clusters is not enough. Every layer might simply reproduce the finest partition. We therefore evaluate every neural layer against every latent level,
+\begin{equation}
+Q_{\ell j}=Q_{\mathrm{match}}\!\left(C^{(\ell,j)}\right).
+\end{equation}
+A successful hierarchy should produce a correspondence matrix with a strong diagonal band,
+\begin{equation}
+Q_{\ell\ell} > Q_{\ell j},\qquad j\neq \ell.
+\end{equation}
+A specificity term can be defined as
+\begin{equation}
+Q_{\mathrm{spec}}=\frac{1}{M+1}\sum_\ell\left[Q_{\ell\ell}-\max_{j\neq\ell}Q_{\ell j}\right].
+\end{equation}
+This distinguishes scale-appropriate abstraction from indiscriminate information retention.
+
+\section{Topology Consistency}
+Independent success at each layer still does not prove that the network learned a coherent hierarchy. Let $A_\ell$ be the true parent--child incidence matrix between generative levels $\ell$ and $\ell+1$. Let $\widehat A_\ell$ be an empirical neural relation derived from adjacent-layer co-activity or effective connectivity. After solving the independent permutations $P_\ell$ and $P_{\ell+1}$, coherent hierarchy recovery requires approximately
+\begin{equation}
+P_{\ell+1}\widehat A_\ell P_\ell^T \approx A_\ell.
+\end{equation}
+This metric separates ``correct clustering at several resolutions'' from ``a neural hierarchy whose higher units are actually built from the appropriate lower-level groups.''
+
+\section{Constraints and Anti-Gaming Design}
+Automated code search makes benchmark integrity critical. The generator, topology, evaluator, seeds, hidden worlds, metric implementation, and locality checks are immutable. A candidate is rejected for non-finite states, uncontrolled weight growth, pathological inactivity, winner collapse, forbidden information access, or API changes. Complexity is mildly penalized so a marginal score improvement does not justify an unnecessarily elaborate mechanism.
+
+The local-rule API itself acts as an information firewall. Rather than merely asking an agent to ``be biologically plausible,'' the software exposes a restricted set of variables. Scientific locality is therefore partly enforced structurally.
+
+\section{Two-Level Optimization}
+We separate structural rule discovery from scalar parameter tuning. Let $R$ denote the functional form of the rule and $\theta$ its numeric parameters. For a proposed rule,
+\begin{equation}
+\theta_R^*=\arg\max_\theta F(R,\theta)
+\end{equation}
+is approximated using a fixed numerical optimizer such as differential evolution. A coding agent then searches over changes in $R$ itself. This prevents expensive agent iterations from being consumed by small learning-rate adjustments and makes rule mutations more mechanistically meaningful.
+
+Fitness aggregates multiple seeds and worlds. A representative robust objective is
+\begin{equation}
+F = \mathbb{E}[Q] - \lambda_\sigma\mathrm{Std}[Q] + \lambda_{\min}\min Q - \lambda_C C(R),
+\end{equation}
+where $Q$ combines within-level recovery, specificity, and topology consistency, and $C(R)$ is a complexity cost. Promotion therefore favors reliable and transferable rules rather than lucky runs.
+
+\section{Autonomous Experimental Cycle}
+Each cycle follows a constrained scientific protocol: inspect recent failures; state one mechanistic hypothesis; snapshot the current rule; change only the rule implementation; optimize its continuous parameters; run the fixed multi-world, multi-seed panel; reject violations; compare robust fitness; promote or revert; and record an interpretation. Rule snapshots form a genealogy so older mechanisms can be revisited or recombined rather than lost through greedy hill climbing.
+
+Candidate mechanisms include, but are not limited to, covariance-based Hebbian terms, Oja normalization, BCM-like sliding thresholds, anti-Hebbian decorrelation, winner-take-all competition, local homeostasis, eligibility traces, adaptive plasticity, and multiple timescales. These are hypotheses, not assumptions. One purpose of the system is to discover combinations that are difficult to derive by intuition alone.
+
+\section{From Hierarchical Clusters to Concepts and Invariants}
+Nested Gaussians test whether local rules can reconstruct a known statistical hierarchy. The more ambitious hypothesis is that abstractions correspond to structures that remain stable across increasingly broad transformations and timescales. A staged benchmark can therefore evolve from Gaussian clusters to transformation-generated observations,
+\begin{equation}
+x_t=T(a_t,z)+\epsilon_t,
+\end{equation}
+where many sensory states correspond to the same latent object $z$, and eventually to active sensorimotor dynamics,
+\begin{equation}
+x_{t+1}=G(x_t,a_t,z).
+\end{equation}
+In such environments, action provides controlled perturbations. A local rule that preferentially stabilizes representations surviving these perturbations may construct invariants without requiring externally supplied category labels. Higher layers can additionally be assigned slower plasticity and longer integration windows, testing the idea that representational depth corresponds to progressively wider domains of invariance.
+
+\section{Expected Contributions and Limitations}
+The proposed contribution is methodological rather than a claim that one local rule has already solved abstraction. First, exact latent hierarchies make internal representation quality measurable. Second, permutation-invariant matching avoids an invalid dependence on arbitrary neuron identities. Third, topology consistency tests whether layers form a hierarchy rather than independent clusterings. Fourth, autonomous code search can explore plasticity mechanisms while immutable locality constraints preserve the scientific question.
+
+The primary limitation is synthetic simplicity. Gaussian hierarchies strongly favor clustering solutions. Rules that succeed must therefore be challenged on held-out generator families and increasingly non-cluster-like invariances before conclusions about vision, language, or biological cognition are justified. A second limitation is that matching neural layer width to true latent cardinality provides substantial prior knowledge; over-provisioned and self-structuring networks are necessary subsequent tests.
+
+\section{Conclusion}
+We propose a path from intuition-driven local plasticity design to controlled automated discovery. The researcher specifies the admissible local information, fixed hierarchical worlds, and invariance-aware criteria; a numerical optimizer tunes continuous parameters; and a coding agent iteratively proposes new learning mechanisms. The key evaluation principle is that representation identity is defined only up to permutation: a learned layer is correct when some assignment of neuron identities makes its relation to the latent level approximately identity, and a learned hierarchy is correct when those aligned layers also reproduce the true parent--child structure. This framework can serve as a compact experimental laboratory for asking which local dynamics are sufficient to generate progressively organized abstractions.
+
+\end{document}
